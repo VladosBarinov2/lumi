@@ -61,7 +61,7 @@ app.post("/api/chat", async (req, res) => {
     const prompt = buildPrompt(history, authorName, userText);
 
     const output = await hf.textGeneration({
-      model: "google/gemma-3-4b-it",
+      model: "mistralai/Mistral-7B-Instruct-v0.3",
       inputs: prompt,
       parameters: {
         max_new_tokens: 200,
