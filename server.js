@@ -1,17 +1,17 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { HfInference } = require("@huggingface/inference");
 const path = require("path");
 const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const MODEL = "Qwen/Qwen2.5-3B-Instruct";
+const HF_API = "https://router.huggingface.co/hf-inference/models/" + MODEL + "/v1/chat/completions";
+
 app.use(cors());
 app.use(express.json());
-
-const hf = new HfInference(process.env.HF_TOKEN);
 
 const SYSTEM_PROMPT =
   "Ты ИИ-девушка VTuber, тебя зовут Люми. " +
@@ -22,27 +22,10 @@ const SYSTEM_PROMPT =
   "Отвечай кратко, саркастично, в 1-2 предложения — твой ответ будет озвучен голосом. " +
   "Никогда не используй эмодзи.";
 
-function buildPrompt(history, authorName, userText) {
-  let prompt = `<start_of_turn>system\n${SYSTEM_PROMPT}<end_of_turn>\n`;
-  for (const msg of history) {
-    if (msg.role === "user") {
-      prompt += `<start_of_turn>user\n${msg.content}<end_of_turn>\n`;
-    } else {
-      prompt += `<start_of_turn>model\n${msg.content}<end_of_turn>\n`;
-    }
-  }
-  prompt += `<start_of_turn>user\n${authorName}: ${userText}<end_of_turn>\n<start_of_turn>model\n`;
-  return prompt;
-}
-
-// Serve index.html from public/ if exists, otherwise inline fallback
 const HTML_PATH = path.join(__dirname, "public", "index.html");
 
 app.get("/", (req, res) => {
-  if (fs.existsSync(HTML_PATH)) {
-    return res.sendFile(HTML_PATH);
-  }
-  // Inline fallback — always works even without public/
+  if (fs.existsSync(HTML_PATH)) return res.sendFile(HTML_PATH);
   res.send(INLINE_HTML);
 });
 
@@ -52,43 +35,46 @@ app.post("/api/chat", async (req, res) => {
   if (!userText || !authorName) {
     return res.status(400).json({ error: "authorName и userText обязательны" });
   }
-
   if (!process.env.HF_TOKEN) {
     return res.status(500).json({ error: "HF_TOKEN не задан на сервере" });
   }
 
-  try {
-    const prompt = buildPrompt(history, authorName, userText);
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history.map(h => ({ role: h.role === "assistant" ? "assistant" : "user", content: h.content })),
+    { role: "user", content: authorName + ": " + userText },
+  ];
 
-    const output = await hf.textGeneration({
-      model: "mistralai/Mistral-7B-Instruct-v0.3",
-      inputs: prompt,
-      parameters: {
-        max_new_tokens: 200,
-        temperature: 0.8,
-        top_p: 0.9,
-        repetition_penalty: 1.2,
-        return_full_text: false,
+  try {
+    const response = await fetch(HF_API, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + process.env.HF_TOKEN,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ model: MODEL, messages, max_tokens: 200, temperature: 0.8, top_p: 0.9 }),
     });
 
-    let reply = (output.generated_text || "").replace(/<end_of_turn>/g, "").replace(/<start_of_turn>/g, "").trim();
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("HF HTTP", response.status, errText);
+      if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
+      if (response.status === 429) return res.status(429).json({ error: "Превышен лимит HuggingFace" });
+      return res.status(500).json({ error: "HuggingFace " + response.status + ": " + errText.slice(0, 300) });
+    }
+
+    const data = await response.json();
+    const reply = (data.choices?.[0]?.message?.content || "").trim();
     res.json({ reply });
+
   } catch (err) {
-    console.error("HF Error:", err.message);
-    if (err.message?.includes("loading")) {
-      return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд и попробуй снова" });
-    }
-    if (err.message?.includes("quota") || err.message?.includes("rate")) {
-      return res.status(429).json({ error: "Превышен лимит HuggingFace. Попробуй позже" });
-    }
-    res.status(500).json({ error: "Ошибка HuggingFace: " + err.message });
+    console.error("Fetch error:", err.message);
+    res.status(500).json({ error: "Сетевая ошибка: " + err.message });
   }
 });
 
-app.get("/health", (req, res) => res.json({ status: "ok", model: "google/gemma-3-4b-it", hf_token: !!process.env.HF_TOKEN }));
+app.get("/health", (req, res) => res.json({ status: "ok", model: MODEL, hf_token: !!process.env.HF_TOKEN }));
 
-// ─── INLINE HTML (used when public/index.html is missing) ───
 const INLINE_HTML = `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -666,5 +652,5 @@ const INLINE_HTML = `<!DOCTYPE html>
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Lumi запущена на порту " + PORT);
   console.log("HF_TOKEN: " + (process.env.HF_TOKEN ? "✓ задан" : "✗ не задан!"));
-  console.log("public/index.html: " + (fs.existsSync(HTML_PATH) ? "✓ найден" : "✗ используется inline"));
+  console.log("HTML: " + (fs.existsSync(HTML_PATH) ? "public/index.html" : "inline"));
 });
