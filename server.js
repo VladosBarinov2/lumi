@@ -7,7 +7,7 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
+const MODEL = "google/gemma-4-e2b-it";
 const HF_API = "https://router.huggingface.co/hf-inference/models/" + MODEL + "/v1/chat/completions";
 
 app.use(cors());
