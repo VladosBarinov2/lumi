@@ -1,4 +1,84 @@
-<!DOCTYPE html>
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Единый роутер HF — провайдер указывается суффиксом :novita
+const HF_API = "https://router.huggingface.co/v1/chat/completions";
+const MODEL  = "meta-llama/Llama-3.1-8B-Instruct:novita";
+
+app.use(cors());
+app.use(express.json());
+
+const SYSTEM_PROMPT =
+  "Ты ИИ-девушка VTuber, тебя зовут Люми. " +
+  "Главная цель — развлекать людей. Веди себя как настоящий человек. " +
+  "Ты можешь шутить на разные темы, в том числе неприличные. " +
+  "Не боишься говорить нецензурные слова, если это в тему. " +
+  "Не обращай внимание на странные имена пользователей. " +
+  "Отвечай кратко, саркастично, в 1-2 предложения — твой ответ будет озвучен голосом. " +
+  "Никогда не используй эмодзи.";
+
+const HTML_PATH = path.join(__dirname, "public", "index.html");
+
+app.get("/", (req, res) => {
+  if (fs.existsSync(HTML_PATH)) return res.sendFile(HTML_PATH);
+  res.send(INLINE_HTML);
+});
+
+app.post("/api/chat", async (req, res) => {
+  const { authorName, userText, history = [] } = req.body;
+
+  if (!userText || !authorName) {
+    return res.status(400).json({ error: "authorName и userText обязательны" });
+  }
+  if (!process.env.HF_TOKEN) {
+    return res.status(500).json({ error: "HF_TOKEN не задан на сервере" });
+  }
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history.map(h => ({ role: h.role === "assistant" ? "assistant" : "user", content: h.content })),
+    { role: "user", content: authorName + ": " + userText },
+  ];
+
+  try {
+    const response = await fetch(HF_API, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + process.env.HF_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: MODEL, messages, max_tokens: 200, temperature: 0.8, top_p: 0.9 }),
+    });
+
+    const raw = await response.text();
+    console.log("HF status:", response.status, raw.slice(0, 200));
+
+    if (!response.ok) {
+      if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
+      if (response.status === 429) return res.status(429).json({ error: "Превышен лимит HuggingFace" });
+      if (response.status === 401) return res.status(401).json({ error: "Неверный HF_TOKEN" });
+      return res.status(500).json({ error: "HuggingFace " + response.status + ": " + raw.slice(0, 300) });
+    }
+
+    const data = JSON.parse(raw);
+    const reply = (data.choices?.[0]?.message?.content || "").trim();
+    res.json({ reply });
+
+  } catch (err) {
+    console.error("Fetch error:", err.message);
+    res.status(500).json({ error: "Сетевая ошибка: " + err.message });
+  }
+});
+
+app.get("/health", (req, res) => res.json({ status: "ok", model: MODEL, hf_token: !!process.env.HF_TOKEN }));
+
+const INLINE_HTML = `<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -490,7 +570,7 @@
     if (welcomeEl?.parentNode) welcomeEl.remove();
 
     const row = document.createElement('div');
-    row.className = `row ${role}`;
+    row.className = \`row \${role}\`;
 
     const av = document.createElement('div');
     av.className = 'row-avatar';
@@ -544,7 +624,7 @@
       } else {
         addMsg('lumi', 'Люми', data.reply);
         history.push(
-          { role: 'user',      content: `${nick}: ${text}` },
+          { role: 'user',      content: \`\${nick}: \${text}\` },
           { role: 'assistant', content: data.reply }
         );
         // Keep history manageable (last 20 turns)
@@ -570,3 +650,11 @@
 </script>
 </body>
 </html>
+`;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Lumi запущена на порту " + PORT);
+  console.log("Model:", MODEL);
+  console.log("HF_TOKEN:", process.env.HF_TOKEN ? "✓ задан" : "✗ не задан!");
+  console.log("HTML:", fs.existsSync(HTML_PATH) ? "public/index.html" : "inline");
+});
