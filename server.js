@@ -7,8 +7,9 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const MODEL = "google/gemma-4-e2b-it";
-const HF_API = "https://router.huggingface.co/hf-inference/models/" + MODEL + "/v1/chat/completions";
+// novita провайдер — бесплатный, поддерживает Llama
+const MODEL    = "meta-llama/Llama-3.2-3B-Instruct";
+const HF_API   = "https://router.huggingface.co/novita/v1/chat/completions";
 
 app.use(cors());
 app.use(express.json());
@@ -52,18 +53,26 @@ app.post("/api/chat", async (req, res) => {
         "Authorization": "Bearer " + process.env.HF_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: MODEL, messages, max_tokens: 200, temperature: 0.8, top_p: 0.9 }),
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        max_tokens: 200,
+        temperature: 0.8,
+        top_p: 0.9,
+      }),
     });
 
+    const raw = await response.text();
+
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("HF HTTP", response.status, errText);
+      console.error("HF HTTP", response.status, raw);
       if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
       if (response.status === 429) return res.status(429).json({ error: "Превышен лимит HuggingFace" });
-      return res.status(500).json({ error: "HuggingFace " + response.status + ": " + errText.slice(0, 300) });
+      if (response.status === 401) return res.status(401).json({ error: "Неверный HF_TOKEN — проверь в Railway Variables" });
+      return res.status(500).json({ error: "HuggingFace " + response.status + ": " + raw.slice(0, 300) });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(raw);
     const reply = (data.choices?.[0]?.message?.content || "").trim();
     res.json({ reply });
 
@@ -73,7 +82,12 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.get("/health", (req, res) => res.json({ status: "ok", model: MODEL, hf_token: !!process.env.HF_TOKEN }));
+app.get("/health", (req, res) => res.json({
+  status: "ok",
+  model: MODEL,
+  provider: "novita",
+  hf_token: !!process.env.HF_TOKEN
+}));
 
 const INLINE_HTML = `<!DOCTYPE html>
 <html lang="ru">
@@ -651,6 +665,7 @@ const INLINE_HTML = `<!DOCTYPE html>
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Lumi запущена на порту " + PORT);
+  console.log("Model: " + MODEL);
   console.log("HF_TOKEN: " + (process.env.HF_TOKEN ? "✓ задан" : "✗ не задан!"));
   console.log("HTML: " + (fs.existsSync(HTML_PATH) ? "public/index.html" : "inline"));
 });
