@@ -7,9 +7,9 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// novita провайдер — бесплатный, поддерживает Llama
-const MODEL    = "meta-llama/Llama-3.2-3B-Instruct";
-const HF_API   = "https://router.huggingface.co/novita/v1/chat/completions";
+// Единый роутер HF — провайдер указывается суффиксом :novita
+const HF_API = "https://router.huggingface.co/v1/chat/completions";
+const MODEL  = "meta-llama/Llama-3.1-8B-Instruct:novita";
 
 app.use(cors());
 app.use(express.json());
@@ -53,22 +53,16 @@ app.post("/api/chat", async (req, res) => {
         "Authorization": "Bearer " + process.env.HF_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        max_tokens: 200,
-        temperature: 0.8,
-        top_p: 0.9,
-      }),
+      body: JSON.stringify({ model: MODEL, messages, max_tokens: 200, temperature: 0.8, top_p: 0.9 }),
     });
 
     const raw = await response.text();
+    console.log("HF status:", response.status, raw.slice(0, 200));
 
     if (!response.ok) {
-      console.error("HF HTTP", response.status, raw);
       if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
       if (response.status === 429) return res.status(429).json({ error: "Превышен лимит HuggingFace" });
-      if (response.status === 401) return res.status(401).json({ error: "Неверный HF_TOKEN — проверь в Railway Variables" });
+      if (response.status === 401) return res.status(401).json({ error: "Неверный HF_TOKEN" });
       return res.status(500).json({ error: "HuggingFace " + response.status + ": " + raw.slice(0, 300) });
     }
 
@@ -82,12 +76,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.get("/health", (req, res) => res.json({
-  status: "ok",
-  model: MODEL,
-  provider: "novita",
-  hf_token: !!process.env.HF_TOKEN
-}));
+app.get("/health", (req, res) => res.json({ status: "ok", model: MODEL, hf_token: !!process.env.HF_TOKEN }));
 
 const INLINE_HTML = `<!DOCTYPE html>
 <html lang="ru">
@@ -665,7 +654,7 @@ const INLINE_HTML = `<!DOCTYPE html>
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Lumi запущена на порту " + PORT);
-  console.log("Model: " + MODEL);
-  console.log("HF_TOKEN: " + (process.env.HF_TOKEN ? "✓ задан" : "✗ не задан!"));
-  console.log("HTML: " + (fs.existsSync(HTML_PATH) ? "public/index.html" : "inline"));
+  console.log("Model:", MODEL);
+  console.log("HF_TOKEN:", process.env.HF_TOKEN ? "✓ задан" : "✗ не задан!");
+  console.log("HTML:", fs.existsSync(HTML_PATH) ? "public/index.html" : "inline");
 });
