@@ -52,7 +52,7 @@ app.post("/api/chat", async (req, res) => {
 
     const raw = await response.text();
     console.log("HF status:", response.status, raw.slice(0, 200));
-    console.log(`[${new Date().toISOString()}] ${authorName}: ${userText}`);
+    console.log(`[${new Date().toISOString()}] ${authorName} (history:${history.length}): ${userText}`);
 
     if (!response.ok) {
       if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
