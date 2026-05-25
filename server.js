@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 const SYSTEM_PROMPT =
-  "Ты ии помошник по прграмированию должен объяснять ошибки, иправлять код";
+  "Ты ии помощник по программированию должен объяснять ошибки, исправлять код";
 
 const HTML_PATH = path.join(__dirname, "public", "index.html");
 
