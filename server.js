@@ -47,7 +47,7 @@ app.post("/api/chat", async (req, res) => {
         "Authorization": "Bearer " + process.env.HF_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: MODEL, messages, max_tokens: 200, temperature: 0.8, top_p: 0.9 }),
+      body: JSON.stringify({ model: MODEL, messages, max_tokens: 400, temperature: 0.8, top_p: 0.7 }),
     });
 
     const raw = await response.text();
