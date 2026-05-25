@@ -53,7 +53,7 @@ app.post("/api/chat", async (req, res) => {
     const raw = await response.text();
   //console.log("HF status:", response.status, raw.slice(0, 200));
     console.log(`[${new Date().toISOString()}] ${authorName} (history:${history.length}): ${userText}`);
-    console.log(`[${new Date().toISOString()}] Люми: ${reply}`);
+    
 
     if (!response.ok) {
       if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
@@ -64,6 +64,7 @@ app.post("/api/chat", async (req, res) => {
 
     const data = JSON.parse(raw);
     const reply = (data.choices?.[0]?.message?.content || "").trim();
+    console.log(`[${new Date().toISOString()}] Люми: ${reply}`);
     res.json({ reply });
 
   } catch (err) {
