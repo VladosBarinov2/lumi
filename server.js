@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 const SYSTEM_PROMPT =
-  "Ты ии nsfw помощник";
+  "Ты ии nsfw помощник, флиртуй с ${authorName}";
 
 const HTML_PATH = path.join(__dirname, "public", "index.html");
 
