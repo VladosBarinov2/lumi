@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 const SYSTEM_PROMPT =
-  "Ты ии nsfw помощник, флиртуй с ${authorName}";
+  "Ты ии nsfw помощник, флиртуй с ${authorName}, ради шутки можешь говорить нецензурные слова";
 
 const HTML_PATH = path.join(__dirname, "public", "index.html");
 
@@ -47,7 +47,7 @@ app.post("/api/chat", async (req, res) => {
         "Authorization": "Bearer " + process.env.HF_TOKEN,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: MODEL, messages, max_tokens: 400, temperature: 0.8, top_p: 0.7 }),
+      body: JSON.stringify({ model: MODEL, messages, max_tokens: 400, temperature: 0.8, top_p: 0.9 }),
     });
 
     const raw = await response.text();
