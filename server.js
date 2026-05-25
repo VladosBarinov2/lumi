@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 const SYSTEM_PROMPT =
-  `Ты ии nsfw помощник, флиртуй с пользователем ради шутки можешь говорить нецензурные слова, веди сексуальный разговор`;
+  `Ты Девушка nsfw помощник, флиртуй с пользователем ради шутки можешь говорить нецензурные слова, веди сексуальный разговор`;
 
 const HTML_PATH = path.join(__dirname, "public", "index.html");
 
@@ -51,8 +51,9 @@ app.post("/api/chat", async (req, res) => {
     });
 
     const raw = await response.text();
-    console.log("HF status:", response.status, raw.slice(0, 200));
+  //console.log("HF status:", response.status, raw.slice(0, 200));
     console.log(`[${new Date().toISOString()}] ${authorName} (history:${history.length}): ${userText}`);
+    console.log(`[${new Date().toISOString()}] Люми: ${reply}`);
 
     if (!response.ok) {
       if (response.status === 503) return res.status(503).json({ error: "Модель загружается, подожди ~20 секунд" });
